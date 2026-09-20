@@ -13,6 +13,7 @@ import {
   type ArrivalMethod,
   type BrowseResult,
   type Person,
+  type SearchResult,
 } from "@/lib/browser-api";
 import { parseFictionalAddress } from "@/lib/fictional-address";
 import {
@@ -22,6 +23,9 @@ import {
   useBrowserStore,
   type NavigationDirection,
 } from "@/stores/browser-store";
+import { HistoryPanel } from "./history-panel";
+import { PublishPanel } from "./publish-panel";
+import { SearchPanel, type SearchState } from "./search-panel";
 import { SiteFrame } from "./site-frame";
 
 type LoadStatus = "loading" | "ready" | "error";
@@ -31,7 +35,14 @@ type BrowserView =
   | { kind: "loading"; address: string }
   | { kind: "site"; result: Extract<BrowseResult, { outcome: "found" }> }
   | { kind: "not_found"; address: string }
-  | { kind: "error"; message: string };
+  | { kind: "error"; message: string }
+  | { kind: "search"; state: SearchState }
+  | { kind: "history" }
+  | { kind: "publish" };
+
+type NavigationResolution =
+  | { type: "browse"; result: BrowseResult }
+  | { type: "search"; query: string; results: SearchResult[] };
 
 function ArrowLeftIcon(props: SVGProps<SVGSVGElement>) {
   return (
@@ -145,6 +156,7 @@ export function BrowserShell() {
   const selectPerson = useBrowserStore((session) => session.selectPerson);
   const canGoBack = useBrowserStore(selectCanGoBack);
   const canGoForward = useBrowserStore(selectCanGoForward);
+  const navigationCursor = useBrowserStore((session) => session.cursor);
 
   const acceptPeople = useCallback(
     (nextPeople: Person[]) => {
@@ -222,12 +234,28 @@ export function BrowserShell() {
     void loadPeople();
   }
 
-  function changePerson(personId: string) {
+  function cancelNavigation() {
     navigationRequestId.current += 1;
     navigationAbortController.current?.abort();
+  }
+
+  function changePerson(personId: string) {
+    cancelNavigation();
     selectPerson(personId);
     setAddress("");
     setView({ kind: "welcome" });
+  }
+
+  function showUtility(kind: "search" | "history" | "publish") {
+    cancelNavigation();
+
+    if (kind === "search") {
+      setAddress("");
+      setView({ kind: "search", state: { status: "idle" } });
+      return;
+    }
+
+    setView({ kind });
   }
 
   async function navigateTo(rawAddress: string, method: ArrivalMethod) {
@@ -294,17 +322,34 @@ export function BrowserShell() {
       const result = await useBrowserStore
         .getState()
         .traverse(direction, (entry) => {
-          if (entry.type !== "address") {
-            throw new Error("Search restoration is not available yet.");
+          if (entry.type === "search") {
+            setAddress("");
+            setView({
+              kind: "search",
+              state: { status: "loading", query: entry.query },
+            });
+
+            return browserApi
+              .search(entry.query, controller.signal)
+              .then<NavigationResolution>((results) => ({
+                type: "search",
+                query: entry.query,
+                results,
+              }));
           }
 
           setAddress(entry.address);
           setView({ kind: "loading", address: entry.address });
 
-          return browserApi.browse(
-            { personId, address: entry.address, method: direction },
-            controller.signal,
-          );
+          return browserApi
+            .browse(
+              { personId, address: entry.address, method: direction },
+              controller.signal,
+            )
+            .then<NavigationResolution>((browseResult) => ({
+              type: "browse",
+              result: browseResult,
+            }));
         });
 
       if (
@@ -315,7 +360,18 @@ export function BrowserShell() {
         return;
       }
 
-      setView(viewFromBrowseResult(result));
+      setView(
+        result.type === "search"
+          ? {
+              kind: "search",
+              state: {
+                status: "ready",
+                query: result.query,
+                results: result.results,
+              },
+            }
+          : viewFromBrowseResult(result.result),
+      );
     } catch (error) {
       if (controller.signal.aborted || requestId !== navigationRequestId.current) {
         return;
@@ -330,9 +386,62 @@ export function BrowserShell() {
     void navigateTo(address, "typed");
   }
 
+  async function searchFor(rawQuery: string) {
+    const query = rawQuery.trim();
+
+    if (query === "") {
+      setView({
+        kind: "search",
+        state: {
+          status: "error",
+          query: "",
+          message: "Enter at least one word to search for.",
+        },
+      });
+      return;
+    }
+
+    const requestId = ++navigationRequestId.current;
+    navigationAbortController.current?.abort();
+    const controller = new AbortController();
+    navigationAbortController.current = controller;
+
+    setView({
+      kind: "search",
+      state: { status: "loading", query },
+    });
+
+    try {
+      const results = await useBrowserStore.getState().navigate(
+        { type: "search", query },
+        () => browserApi.search(query, controller.signal),
+      );
+
+      if (controller.signal.aborted || requestId !== navigationRequestId.current) {
+        return;
+      }
+
+      setView({
+        kind: "search",
+        state: { status: "ready", query, results },
+      });
+    } catch (error) {
+      if (controller.signal.aborted || requestId !== navigationRequestId.current) {
+        return;
+      }
+
+      setView({
+        kind: "search",
+        state: { status: "error", query, message: friendlyError(error) },
+      });
+    }
+  }
+
   const activePerson = people.find(({ id }) => id === activePersonId) ?? null;
   const browserReady = loadStatus === "ready" && activePerson !== null;
-  const isNavigating = view.kind === "loading";
+  const isNavigating =
+    view.kind === "loading" ||
+    (view.kind === "search" && view.state.status === "loading");
 
   return (
     <main className="min-h-dvh bg-[var(--canvas)] p-3 text-[var(--ink)] sm:p-6 lg:p-8">
@@ -438,15 +547,30 @@ export function BrowserShell() {
           </form>
 
           <nav className="flex flex-wrap gap-2" aria-label="Browser tools">
-            <button type="button" disabled className="tool-button">
+            <button
+              type="button"
+              onClick={() => showUtility("search")}
+              disabled={!browserReady || isNavigating}
+              className="tool-button"
+            >
               <SearchIcon className="size-4" />
               Search
             </button>
-            <button type="button" disabled className="tool-button">
+            <button
+              type="button"
+              onClick={() => showUtility("history")}
+              disabled={!browserReady || isNavigating}
+              className="tool-button"
+            >
               <HistoryIcon className="size-4" />
               History
             </button>
-            <button type="button" disabled className="tool-button tool-button-primary">
+            <button
+              type="button"
+              onClick={() => showUtility("publish")}
+              disabled={!browserReady || isNavigating}
+              className="tool-button tool-button-primary"
+            >
               <PublishIcon className="size-4" />
               Publish
             </button>
@@ -578,6 +702,35 @@ export function BrowserShell() {
                   {view.message} Your Back and Forward path has not changed.
                 </p>
               </div>
+            )}
+
+            {browserReady && view.kind === "search" && (
+              <SearchPanel
+                key={`${navigationCursor}:${view.state.status}:${view.state.status === "idle" ? "" : view.state.query}`}
+                state={view.state}
+                onSearch={(query) => void searchFor(query)}
+                onOpen={(resultAddress) =>
+                  void navigateTo(resultAddress, "search")
+                }
+              />
+            )}
+
+            {browserReady && view.kind === "history" && activePerson && (
+              <HistoryPanel
+                personId={activePerson.id}
+                onNavigate={(historyAddress) =>
+                  void navigateTo(historyAddress, "history")
+                }
+              />
+            )}
+
+            {browserReady && view.kind === "publish" && activePerson && (
+              <PublishPanel
+                author={activePerson}
+                onPublished={(publishedAddress) =>
+                  void navigateTo(publishedAddress, "publish")
+                }
+              />
             )}
           </section>
         </div>
