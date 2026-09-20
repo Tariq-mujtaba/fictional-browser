@@ -4,6 +4,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  MaxLength,
   Matches,
 } from 'class-validator';
 import {
@@ -24,9 +25,11 @@ export class PublishSiteRequestDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(200)
   title?: string;
 
   @IsString()
   @IsNotEmpty()
+  @MaxLength(100_000)
   html!: string;
 }

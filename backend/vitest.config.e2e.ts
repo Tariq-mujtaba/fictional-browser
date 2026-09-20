@@ -5,6 +5,7 @@ export default defineConfig({
     tsconfigPaths: true,
   },
   test: {
+    fileParallelism: false,
     globals: true,
     hookTimeout: 60_000,
     testTimeout: 60_000,
