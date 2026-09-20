@@ -1,0 +1,29 @@
+# Private planning
+REQUIREMENTS.md
+ARCHITECTURE.md
+IMPLEMENTATION_PLAN.md
+
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Builds and tests
+dist/
+.next/
+coverage/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
