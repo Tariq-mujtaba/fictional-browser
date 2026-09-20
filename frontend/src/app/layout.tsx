@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Fictional Web Browser",
+  title: "Elsewhere — Fictional Web Browser",
   description: "Browse a fictional web of .zz sites.",
 };
 
