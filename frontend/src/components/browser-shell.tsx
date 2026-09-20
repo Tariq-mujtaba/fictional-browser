@@ -3,13 +3,18 @@
 import {
   type FormEvent,
   type SVGProps,
+  useCallback,
   useEffect,
   useRef,
   useState,
 } from "react";
 import { browserApi, type Person } from "@/lib/browser-api";
-
-export const ACTIVE_PERSON_STORAGE_KEY = "fictional-web.active-person";
+import {
+  hydrateBrowserSession,
+  selectCanGoBack,
+  selectCanGoForward,
+  useBrowserStore,
+} from "@/stores/browser-store";
 
 type LoadStatus = "loading" | "ready" | "error";
 
@@ -107,12 +112,30 @@ function friendlyError(error: unknown): string {
 
 export function BrowserShell() {
   const [people, setPeople] = useState<Person[]>([]);
-  const [activePersonId, setActivePersonId] = useState<string | null>(null);
   const [address, setAddress] = useState("");
   const [loadStatus, setLoadStatus] = useState<LoadStatus>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
   const peopleRequestId = useRef(0);
   const peopleAbortController = useRef<AbortController | null>(null);
+  const activePersonId = useBrowserStore((session) => session.activePersonId);
+  const selectPerson = useBrowserStore((session) => session.selectPerson);
+  const canGoBack = useBrowserStore(selectCanGoBack);
+  const canGoForward = useBrowserStore(selectCanGoForward);
+
+  const acceptPeople = useCallback(
+    (nextPeople: Person[]) => {
+      const storedPersonId = useBrowserStore.getState().activePersonId;
+      const nextPersonId =
+        nextPeople.find(({ id }) => id === storedPersonId)?.id ??
+        nextPeople[0]?.id ??
+        null;
+
+      setPeople(nextPeople);
+      selectPerson(nextPersonId);
+      setLoadStatus("ready");
+    },
+    [selectPerson],
+  );
 
   async function loadPeople() {
     const requestId = ++peopleRequestId.current;
@@ -127,21 +150,7 @@ export function BrowserShell() {
         return;
       }
 
-      const storedPersonId = sessionStorage.getItem(ACTIVE_PERSON_STORAGE_KEY);
-      const nextPersonId =
-        nextPeople.find(({ id }) => id === storedPersonId)?.id ??
-        nextPeople[0]?.id ??
-        null;
-
-      setPeople(nextPeople);
-      setActivePersonId(nextPersonId);
-      setLoadStatus("ready");
-
-      if (nextPersonId) {
-        sessionStorage.setItem(ACTIVE_PERSON_STORAGE_KEY, nextPersonId);
-      } else {
-        sessionStorage.removeItem(ACTIVE_PERSON_STORAGE_KEY);
-      }
+      acceptPeople(nextPeople);
     } catch (error) {
       if (controller.signal.aborted || requestId !== peopleRequestId.current) {
         return;
@@ -157,28 +166,14 @@ export function BrowserShell() {
     const controller = new AbortController();
     peopleAbortController.current = controller;
 
-    void browserApi
-      .getPeople(controller.signal)
+    void Promise.resolve(hydrateBrowserSession())
+      .then(() => browserApi.getPeople(controller.signal))
       .then((nextPeople) => {
         if (controller.signal.aborted || requestId !== peopleRequestId.current) {
           return;
         }
 
-        const storedPersonId = sessionStorage.getItem(ACTIVE_PERSON_STORAGE_KEY);
-        const nextPersonId =
-          nextPeople.find(({ id }) => id === storedPersonId)?.id ??
-          nextPeople[0]?.id ??
-          null;
-
-        setPeople(nextPeople);
-        setActivePersonId(nextPersonId);
-        setLoadStatus("ready");
-
-        if (nextPersonId) {
-          sessionStorage.setItem(ACTIVE_PERSON_STORAGE_KEY, nextPersonId);
-        } else {
-          sessionStorage.removeItem(ACTIVE_PERSON_STORAGE_KEY);
-        }
+        acceptPeople(nextPeople);
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted || requestId !== peopleRequestId.current) {
@@ -193,12 +188,7 @@ export function BrowserShell() {
       peopleRequestId.current += 1;
       peopleAbortController.current?.abort();
     };
-  }, []);
-
-  function changePerson(personId: string) {
-    setActivePersonId(personId);
-    sessionStorage.setItem(ACTIVE_PERSON_STORAGE_KEY, personId);
-  }
+  }, [acceptPeople]);
 
   function retryPeople() {
     setLoadStatus("loading");
@@ -248,7 +238,7 @@ export function BrowserShell() {
             <select
               id="active-person"
               value={activePersonId ?? ""}
-              onChange={(event) => changePerson(event.target.value)}
+              onChange={(event) => selectPerson(event.target.value)}
               disabled={loadStatus !== "ready" || people.length === 0}
               className="min-w-0 max-w-52 rounded-full border-2 border-[var(--ink)] bg-[var(--paper)] px-4 py-2 text-sm font-bold outline-none transition-shadow focus-visible:shadow-[0_0_0_3px_var(--focus)] disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -270,7 +260,7 @@ export function BrowserShell() {
           <div className="flex gap-2" aria-label="Page navigation">
             <button
               type="button"
-              disabled
+              disabled={!browserReady || !canGoBack}
               className="chrome-button"
               aria-label="Go back"
             >
@@ -278,7 +268,7 @@ export function BrowserShell() {
             </button>
             <button
               type="button"
-              disabled
+              disabled={!browserReady || !canGoForward}
               className="chrome-button"
               aria-label="Go forward"
             >

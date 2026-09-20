@@ -2,9 +2,10 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { browserApi } from "@/lib/browser-api";
 import {
-  ACTIVE_PERSON_STORAGE_KEY,
-  BrowserShell,
-} from "./browser-shell";
+  BROWSER_SESSION_STORAGE_KEY,
+  useBrowserStore,
+} from "@/stores/browser-store";
+import { BrowserShell } from "./browser-shell";
 
 const people = [
   { id: "person-1", name: "Ari" },
@@ -12,6 +13,11 @@ const people = [
 ];
 
 beforeEach(() => {
+  useBrowserStore.setState({
+    activePersonId: null,
+    entries: [],
+    cursor: -1,
+  });
   sessionStorage.clear();
 });
 
@@ -22,7 +28,13 @@ afterEach(() => {
 
 describe("BrowserShell", () => {
   it("restores and persists the active person", async () => {
-    sessionStorage.setItem(ACTIVE_PERSON_STORAGE_KEY, "person-2");
+    sessionStorage.setItem(
+      BROWSER_SESSION_STORAGE_KEY,
+      JSON.stringify({
+        state: { activePersonId: "person-2", entries: [], cursor: -1 },
+        version: 0,
+      }),
+    );
     vi.spyOn(browserApi, "getPeople").mockResolvedValue(people);
 
     render(<BrowserShell />);
@@ -34,7 +46,10 @@ describe("BrowserShell", () => {
 
     fireEvent.change(selector, { target: { value: "person-1" } });
 
-    expect(sessionStorage.getItem(ACTIVE_PERSON_STORAGE_KEY)).toBe("person-1");
+    expect(useBrowserStore.getState().activePersonId).toBe("person-1");
+    expect(sessionStorage.getItem(BROWSER_SESSION_STORAGE_KEY)).toContain(
+      '"activePersonId":"person-1"',
+    );
   });
 
   it("shows an actionable error and can retry", async () => {
