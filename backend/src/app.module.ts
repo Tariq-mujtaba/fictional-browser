@@ -4,18 +4,20 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { BrowsingModule } from './browsing/browsing.module.js';
+import { validateEnvironment } from './config/environment.js';
 import { PeopleModule } from './people/people.module.js';
 import { SitesModule } from './sites/sites.module.js';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      validate: validateEnvironment,
+    }),
     MongooseModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        uri:
-          config.get<string>('MONGODB_URI') ??
-          'mongodb://localhost:27017/fictional_web',
+        uri: config.getOrThrow<string>('MONGODB_URI'),
       }),
     }),
     PeopleModule,

@@ -1,25 +1,14 @@
-import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
+import { configureApplication } from './app.setup.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  configureApplication(app);
+
   const config = app.get(ConfigService);
-
-  app.enableCors({
-    origin:
-      config.get<string>('FRONTEND_ORIGIN') ?? 'http://localhost:3000',
-  });
-  app.useGlobalPipes(
-    new ValidationPipe({
-      forbidNonWhitelisted: true,
-      transform: true,
-      whitelist: true,
-    }),
-  );
-
-  const port = Number(config.get<string>('PORT') ?? 3001);
+  const port = config.getOrThrow<number>('PORT');
   await app.listen(port);
 }
 await bootstrap();
