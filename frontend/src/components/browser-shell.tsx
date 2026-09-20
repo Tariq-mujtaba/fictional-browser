@@ -8,15 +8,30 @@ import {
   useRef,
   useState,
 } from "react";
-import { browserApi, type Person } from "@/lib/browser-api";
+import {
+  browserApi,
+  type ArrivalMethod,
+  type BrowseResult,
+  type Person,
+} from "@/lib/browser-api";
+import { parseFictionalAddress } from "@/lib/fictional-address";
 import {
   hydrateBrowserSession,
   selectCanGoBack,
   selectCanGoForward,
   useBrowserStore,
+  type NavigationDirection,
 } from "@/stores/browser-store";
+import { SiteFrame } from "./site-frame";
 
 type LoadStatus = "loading" | "ready" | "error";
+
+type BrowserView =
+  | { kind: "welcome" }
+  | { kind: "loading"; address: string }
+  | { kind: "site"; result: Extract<BrowseResult, { outcome: "found" }> }
+  | { kind: "not_found"; address: string }
+  | { kind: "error"; message: string };
 
 function ArrowLeftIcon(props: SVGProps<SVGSVGElement>) {
   return (
@@ -110,13 +125,22 @@ function friendlyError(error: unknown): string {
   return "The fictional web could not be reached.";
 }
 
+function viewFromBrowseResult(result: BrowseResult): BrowserView {
+  return result.outcome === "found"
+    ? { kind: "site", result }
+    : { kind: "not_found", address: result.address };
+}
+
 export function BrowserShell() {
   const [people, setPeople] = useState<Person[]>([]);
   const [address, setAddress] = useState("");
   const [loadStatus, setLoadStatus] = useState<LoadStatus>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [view, setView] = useState<BrowserView>({ kind: "welcome" });
   const peopleRequestId = useRef(0);
   const peopleAbortController = useRef<AbortController | null>(null);
+  const navigationRequestId = useRef(0);
+  const navigationAbortController = useRef<AbortController | null>(null);
   const activePersonId = useBrowserStore((session) => session.activePersonId);
   const selectPerson = useBrowserStore((session) => session.selectPerson);
   const canGoBack = useBrowserStore(selectCanGoBack);
@@ -187,6 +211,8 @@ export function BrowserShell() {
     return () => {
       peopleRequestId.current += 1;
       peopleAbortController.current?.abort();
+      navigationRequestId.current += 1;
+      navigationAbortController.current?.abort();
     };
   }, [acceptPeople]);
 
@@ -196,12 +222,117 @@ export function BrowserShell() {
     void loadPeople();
   }
 
-  function holdNavigation(event: FormEvent<HTMLFormElement>) {
+  function changePerson(personId: string) {
+    navigationRequestId.current += 1;
+    navigationAbortController.current?.abort();
+    selectPerson(personId);
+    setAddress("");
+    setView({ kind: "welcome" });
+  }
+
+  async function navigateTo(rawAddress: string, method: ArrivalMethod) {
+    const normalizedAddress = parseFictionalAddress(rawAddress);
+
+    if (!normalizedAddress) {
+      setView({
+        kind: "error",
+        message:
+          "Enter one name ending in .zz. Letters, numbers, and internal hyphens are allowed.",
+      });
+      return;
+    }
+
+    const personId = useBrowserStore.getState().activePersonId;
+    if (!personId) {
+      return;
+    }
+
+    const requestId = ++navigationRequestId.current;
+    navigationAbortController.current?.abort();
+    const controller = new AbortController();
+    navigationAbortController.current = controller;
+
+    setAddress(normalizedAddress);
+    setView({ kind: "loading", address: normalizedAddress });
+
+    try {
+      const result = await useBrowserStore.getState().navigate(
+        { type: "address", address: normalizedAddress },
+        () =>
+          browserApi.browse(
+            { personId, address: normalizedAddress, method },
+            controller.signal,
+          ),
+      );
+
+      if (controller.signal.aborted || requestId !== navigationRequestId.current) {
+        return;
+      }
+
+      setView(viewFromBrowseResult(result));
+    } catch (error) {
+      if (controller.signal.aborted || requestId !== navigationRequestId.current) {
+        return;
+      }
+
+      setView({ kind: "error", message: friendlyError(error) });
+    }
+  }
+
+  async function traverse(direction: NavigationDirection) {
+    const personId = useBrowserStore.getState().activePersonId;
+    if (!personId) {
+      return;
+    }
+
+    const requestId = ++navigationRequestId.current;
+    navigationAbortController.current?.abort();
+    const controller = new AbortController();
+    navigationAbortController.current = controller;
+
+    try {
+      const result = await useBrowserStore
+        .getState()
+        .traverse(direction, (entry) => {
+          if (entry.type !== "address") {
+            throw new Error("Search restoration is not available yet.");
+          }
+
+          setAddress(entry.address);
+          setView({ kind: "loading", address: entry.address });
+
+          return browserApi.browse(
+            { personId, address: entry.address, method: direction },
+            controller.signal,
+          );
+        });
+
+      if (
+        result === null ||
+        controller.signal.aborted ||
+        requestId !== navigationRequestId.current
+      ) {
+        return;
+      }
+
+      setView(viewFromBrowseResult(result));
+    } catch (error) {
+      if (controller.signal.aborted || requestId !== navigationRequestId.current) {
+        return;
+      }
+
+      setView({ kind: "error", message: friendlyError(error) });
+    }
+  }
+
+  function submitAddress(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    void navigateTo(address, "typed");
   }
 
   const activePerson = people.find(({ id }) => id === activePersonId) ?? null;
   const browserReady = loadStatus === "ready" && activePerson !== null;
+  const isNavigating = view.kind === "loading";
 
   return (
     <main className="min-h-dvh bg-[var(--canvas)] p-3 text-[var(--ink)] sm:p-6 lg:p-8">
@@ -238,7 +369,7 @@ export function BrowserShell() {
             <select
               id="active-person"
               value={activePersonId ?? ""}
-              onChange={(event) => selectPerson(event.target.value)}
+              onChange={(event) => changePerson(event.target.value)}
               disabled={loadStatus !== "ready" || people.length === 0}
               className="min-w-0 max-w-52 rounded-full border-2 border-[var(--ink)] bg-[var(--paper)] px-4 py-2 text-sm font-bold outline-none transition-shadow focus-visible:shadow-[0_0_0_3px_var(--focus)] disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -260,7 +391,8 @@ export function BrowserShell() {
           <div className="flex gap-2" aria-label="Page navigation">
             <button
               type="button"
-              disabled={!browserReady || !canGoBack}
+              onClick={() => void traverse("back")}
+              disabled={!browserReady || isNavigating || !canGoBack}
               className="chrome-button"
               aria-label="Go back"
             >
@@ -268,7 +400,8 @@ export function BrowserShell() {
             </button>
             <button
               type="button"
-              disabled={!browserReady || !canGoForward}
+              onClick={() => void traverse("forward")}
+              disabled={!browserReady || isNavigating || !canGoForward}
               className="chrome-button"
               aria-label="Go forward"
             >
@@ -276,7 +409,7 @@ export function BrowserShell() {
             </button>
           </div>
 
-          <form className="flex min-w-0" onSubmit={holdNavigation}>
+          <form className="flex min-w-0" onSubmit={submitAddress}>
             <label htmlFor="address" className="sr-only">
               Fictional address
             </label>
@@ -297,7 +430,7 @@ export function BrowserShell() {
             </div>
             <button
               type="submit"
-              disabled
+              disabled={!browserReady || isNavigating || address.trim() === ""}
               className="rounded-r-full border-2 border-[var(--ink)] bg-[var(--ink)] px-5 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-70"
             >
               Go
@@ -324,7 +457,7 @@ export function BrowserShell() {
           <section
             className="relative flex min-h-full w-full overflow-hidden rounded-[1.1rem] border-2 border-[var(--ink)] bg-[var(--paper)]"
             aria-live="polite"
-            aria-busy={loadStatus === "loading"}
+            aria-busy={loadStatus === "loading" || isNavigating}
           >
             {loadStatus === "loading" && (
               <div className="m-auto w-full max-w-md px-8 text-center">
@@ -377,7 +510,7 @@ export function BrowserShell() {
               </div>
             )}
 
-            {browserReady && (
+            {browserReady && view.kind === "welcome" && (
               <div className="network-grid relative flex w-full flex-col items-center justify-center overflow-hidden px-6 py-12 text-center sm:px-12">
                 <div className="relative z-10 flex w-full flex-col items-center">
                   <NetworkMap />
@@ -389,6 +522,61 @@ export function BrowserShell() {
                     Every path stays inside this fictional network.
                   </p>
                 </div>
+              </div>
+            )}
+
+            {browserReady && view.kind === "loading" && (
+              <div className="m-auto w-full max-w-md px-8 text-center">
+                <div className="mx-auto mb-6 flex w-fit gap-2" aria-hidden="true">
+                  <span className="loading-dot" />
+                  <span className="loading-dot [animation-delay:120ms]" />
+                  <span className="loading-dot [animation-delay:240ms]" />
+                </div>
+                <h1 className="text-2xl font-black tracking-[-0.03em]">
+                  Following the path
+                </h1>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+                  Looking for <strong>{view.address}</strong>.
+                </p>
+              </div>
+            )}
+
+            {browserReady && view.kind === "site" && (
+              <SiteFrame
+                title={view.result.site.title}
+                html={view.result.site.html}
+                onNavigate={(nextAddress) => void navigateTo(nextAddress, "link")}
+              />
+            )}
+
+            {browserReady && view.kind === "not_found" && (
+              <div className="network-grid relative m-auto flex min-h-full w-full items-center justify-center overflow-hidden px-8 py-14 text-center">
+                <div className="relative z-10 max-w-lg">
+                  <span className="mx-auto grid size-20 place-items-center rounded-full border-2 border-[var(--ink)] bg-[var(--signal)] text-4xl font-black shadow-[4px_4px_0_var(--ink)]">
+                    ?
+                  </span>
+                  <h1 className="mt-7 text-3xl font-black tracking-[-0.04em]">
+                    This path ends here
+                  </h1>
+                  <p className="mt-3 text-base leading-7 text-[var(--muted)]">
+                    <strong>{view.address}</strong> is a valid fictional address,
+                    but nobody has published a site there.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {browserReady && view.kind === "error" && (
+              <div className="m-auto max-w-lg px-8 py-14 text-center">
+                <span className="mx-auto grid size-14 place-items-center rounded-full border-2 border-[var(--ink)] bg-[var(--coral)] text-2xl font-black text-white">
+                  !
+                </span>
+                <h1 className="mt-6 text-2xl font-black tracking-[-0.03em]">
+                  The path could not be opened
+                </h1>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+                  {view.message} Your Back and Forward path has not changed.
+                </p>
               </div>
             )}
           </section>
