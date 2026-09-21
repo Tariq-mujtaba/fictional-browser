@@ -1,7 +1,5 @@
-# Private planning
-REQUIREMENTS.md
-ARCHITECTURE.md
-IMPLEMENTATION_PLAN.md
+# Private docs
+docs/
 
 # Dependencies
 node_modules/
@@ -26,4 +24,3 @@ npm-debug.log*
 .vscode/
 .DS_Store
 Thumbs.db
-
