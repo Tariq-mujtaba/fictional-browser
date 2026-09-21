@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
 import {
   BrowserApiError,
   browserApi,
@@ -166,6 +167,8 @@ describe("BrowserShell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Go" }));
     const frame = (await screen.findByTitle("Lantern Index")) as HTMLIFrameElement;
 
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+
     window.dispatchEvent(
       new MessageEvent("message", {
         source: frame.contentWindow,
@@ -173,6 +176,7 @@ describe("BrowserShell", () => {
       }),
     );
 
+    await waitFor(() => expect(browse).toHaveBeenCalledTimes(2));
     expect(await screen.findByTitle("Moss Library")).toBeDefined();
     expect(browse).toHaveBeenLastCalledWith(
       expect.objectContaining({ address: "moss.zz", method: "link" }),
@@ -327,6 +331,7 @@ describe("BrowserShell", () => {
         address: publishedSite.address,
         site: publishedSite,
       });
+    const notifySuccess = vi.spyOn(toast, "success");
 
     render(<BrowserShell />);
     await screen.findByText("A small web with strange corners.");
@@ -341,6 +346,9 @@ describe("BrowserShell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Publish site" }));
 
     await screen.findByTitle("new-corner.zz");
+    expect(notifySuccess).toHaveBeenCalledWith("Site published", {
+      description: "new-corner.zz",
+    });
     expect(publish).toHaveBeenCalledWith(
       {
         authorId: "person-1",
@@ -361,6 +369,7 @@ describe("BrowserShell", () => {
     vi.spyOn(browserApi, "publish").mockRejectedValue(
       new BrowserApiError(409, "Address is already published"),
     );
+    const notifyError = vi.spyOn(toast, "error");
     const browse = vi.spyOn(browserApi, "browse");
 
     render(<BrowserShell />);
@@ -374,8 +383,10 @@ describe("BrowserShell", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Publish site" }));
 
-    expect((await screen.findByRole("alert")).textContent).toContain(
-      "Address is already published",
+    await waitFor(() =>
+      expect(notifyError).toHaveBeenCalledWith("The site was not published", {
+        description: "Address is already published",
+      }),
     );
     expect(useBrowserStore.getState()).toMatchObject({ entries: [], cursor: -1 });
     expect(browse).not.toHaveBeenCalled();

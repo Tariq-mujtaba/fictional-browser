@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { toast } from "sonner";
 import {
   browserApi,
   type ArrivalMethod,
@@ -27,6 +28,7 @@ import { HistoryPanel } from "./history-panel";
 import { PublishPanel } from "./publish-panel";
 import { SearchPanel, type SearchState } from "./search-panel";
 import { SiteFrame } from "./site-frame";
+import { LoadingOrbit, StateOrb } from "./ui-primitives";
 
 type LoadStatus = "loading" | "ready" | "error";
 
@@ -94,7 +96,7 @@ function PublishIcon(props: SVGProps<SVGSVGElement>) {
 function NetworkMap() {
   return (
     <svg
-      className="network-map h-auto w-full max-w-[35rem]"
+      className="h-auto w-full max-w-[35rem] animate-[map-arrival_650ms_cubic-bezier(0.2,0.75,0.2,1)_both] text-[rgb(73_81_101_/_48%)] drop-shadow-[0_12px_22px_rgb(63_55_176_/_9%)]"
       viewBox="0 0 560 300"
       role="img"
       aria-label="A map of connected fictional sites"
@@ -106,20 +108,20 @@ function NetworkMap() {
         <path d="m214 175-71 41M313 124l98 91" />
       </g>
       <g stroke="currentColor" strokeWidth="3">
-        <circle cx="88" cy="93" r="12" fill="var(--signal)" />
+        <circle cx="88" cy="93" r="12" fill="#d9d5ff" />
         <circle cx="210" cy="57" r="9" fill="var(--paper)" />
-        <circle cx="313" cy="124" r="14" fill="var(--coral)" />
+        <circle cx="313" cy="124" r="14" fill="var(--accent)" />
         <circle cx="448" cy="80" r="8" fill="var(--paper)" />
         <circle cx="143" cy="216" r="10" fill="var(--paper)" />
         <circle cx="214" cy="175" r="7" fill="var(--paper)" />
-        <circle cx="299" cy="243" r="9" fill="var(--signal)" />
+        <circle cx="299" cy="243" r="9" fill="#d9d5ff" />
         <circle cx="411" cy="215" r="11" fill="var(--paper)" />
       </g>
       <text
         x="313"
         y="132"
         textAnchor="middle"
-        fill="var(--ink)"
+        fill="white"
         className="text-[19px] font-black"
       >
         .zz
@@ -194,6 +196,7 @@ export function BrowserShell() {
 
       setLoadError(friendlyError(error));
       setLoadStatus("error");
+      toast.error("Network unavailable", { description: friendlyError(error) });
     }
   }
 
@@ -218,6 +221,7 @@ export function BrowserShell() {
 
         setLoadError(friendlyError(error));
         setLoadStatus("error");
+        toast.error("Network unavailable", { description: friendlyError(error) });
       });
 
     return () => {
@@ -267,6 +271,9 @@ export function BrowserShell() {
         message:
           "Enter one name ending in .zz. Letters, numbers, and internal hyphens are allowed.",
       });
+      toast.error("Address not recognized", {
+        description: "Enter one name ending in .zz.",
+      });
       return;
     }
 
@@ -304,6 +311,7 @@ export function BrowserShell() {
       }
 
       setView({ kind: "error", message: friendlyError(error) });
+      toast.error("Could not open that path", { description: friendlyError(error) });
     }
   }
 
@@ -378,6 +386,7 @@ export function BrowserShell() {
       }
 
       setView({ kind: "error", message: friendlyError(error) });
+      toast.error("Could not move through history", { description: friendlyError(error) });
     }
   }
 
@@ -398,6 +407,7 @@ export function BrowserShell() {
           message: "Enter at least one word to search for.",
         },
       });
+      toast.error("Enter a search term");
       return;
     }
 
@@ -434,6 +444,7 @@ export function BrowserShell() {
         kind: "search",
         state: { status: "error", query, message: friendlyError(error) },
       });
+      toast.error("Search did not finish", { description: friendlyError(error) });
     }
   }
 
@@ -444,18 +455,18 @@ export function BrowserShell() {
     (view.kind === "search" && view.state.status === "loading");
 
   return (
-    <main className="min-h-dvh bg-[var(--canvas)] p-3 text-[var(--ink)] sm:p-6 lg:p-8">
-      <section className="mx-auto flex min-h-[calc(100dvh-1.5rem)] max-w-[96rem] flex-col overflow-hidden rounded-[1.6rem] border-2 border-[var(--ink)] bg-[var(--chrome)] shadow-[8px_8px_0_var(--ink)] sm:min-h-[calc(100dvh-3rem)] lg:min-h-[calc(100dvh-4rem)]">
-        <header className="flex flex-wrap items-center justify-between gap-4 border-b-2 border-[var(--ink)] px-5 py-4 sm:px-7">
+    <main className="min-h-dvh bg-transparent p-2 text-[var(--ink)] sm:p-4 xl:p-6">
+      <section className="mx-auto flex min-h-[calc(100dvh-1rem)] max-w-[100rem] flex-col overflow-hidden rounded-2xl border border-white/80 bg-[var(--chrome)] shadow-[var(--shadow-window)] sm:min-h-[calc(100dvh-2rem)] xl:min-h-[calc(100dvh-3rem)]">
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--line)] bg-[linear-gradient(180deg,rgb(255_255_255_/_72%),transparent_75%),var(--chrome)] px-3 py-2.5 sm:px-4">
           <div className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-full border-2 border-[var(--ink)] bg-[var(--coral)] text-sm font-black text-white shadow-[2px_2px_0_var(--ink)]">
+            <span className="relative isolate grid size-9 place-items-center overflow-hidden rounded-xl text-[0.72rem] font-bold tracking-[-0.04em] text-white before:absolute before:in-1 before:z-[-1] before:rounded-[0.55rem] before:bg-[radial-gradient(circle_at_34%_28%,#a69fff,var(--accent)_58%,var(--accent-deep))] before:shadow-[inset_0_1px_1px_rgb(255_255_255_/_45%)] before:content-['']">
               .zz
             </span>
             <div>
-              <p className="text-xl font-black leading-none tracking-[-0.04em]">
+              <p className="text-[0.92rem] font-semibold leading-none tracking-[-0.025em]">
                 Elsewhere
               </p>
-              <p className="mt-1 text-xs font-bold text-[var(--muted)]">
+              <p className="mt-1 text-[0.65rem] font-medium text-[var(--muted)]">
                 Fictional web browser
               </p>
             </div>
@@ -463,15 +474,22 @@ export function BrowserShell() {
 
           <div className="flex min-w-0 flex-1 items-center justify-end gap-3 sm:flex-none">
             <span
-              className={`size-2.5 shrink-0 rounded-full border border-[var(--ink)] ${
+              className={`size-2 shrink-0 rounded-full ring-2 ring-white ${
                 loadStatus === "error"
-                  ? "bg-[var(--coral)]"
+                  ? "bg-[var(--danger)]"
                   : loadStatus === "loading"
-                    ? "status-pulse bg-[var(--signal)]"
+                    ? "animate-pulse bg-[var(--warning)]"
                     : "bg-[var(--online)]"
               }`}
               aria-hidden="true"
             />
+            <span className="sr-only">
+              {loadStatus === "error"
+                ? "Disconnected"
+                : loadStatus === "loading"
+                  ? "Connecting"
+                  : "Connected"}
+            </span>
             <label htmlFor="active-person" className="sr-only">
               Browse as
             </label>
@@ -480,7 +498,7 @@ export function BrowserShell() {
               value={activePersonId ?? ""}
               onChange={(event) => changePerson(event.target.value)}
               disabled={loadStatus !== "ready" || people.length === 0}
-              className="min-w-0 max-w-52 rounded-full border-2 border-[var(--ink)] bg-[var(--paper)] px-4 py-2 text-sm font-bold outline-none transition-shadow focus-visible:shadow-[0_0_0_3px_var(--focus)] disabled:cursor-not-allowed disabled:opacity-60"
+              className="min-w-0 max-w-52 rounded-lg border border-[var(--line)] bg-white/70 px-3 py-2 text-xs font-semibold text-[#414958] shadow-[var(--shadow-control)] outline-none transition focus:border-[var(--accent)] focus:ring-3 focus:ring-[rgb(103_92_245_/_12%)] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loadStatus === "loading" && <option>Finding people…</option>}
               {loadStatus === "error" && <option>Disconnected</option>}
@@ -496,14 +514,15 @@ export function BrowserShell() {
           </div>
         </header>
 
-        <div className="grid gap-3 border-b-2 border-[var(--ink)] p-3 lg:grid-cols-[auto_minmax(18rem,1fr)_auto] lg:items-center lg:px-5">
-          <div className="flex gap-2" aria-label="Page navigation">
+        <div className="grid gap-2 border-b border-[var(--line)] bg-[linear-gradient(180deg,rgb(255_255_255_/_72%),transparent_75%),var(--chrome)] p-2.5 sm:grid-cols-[auto_minmax(16rem,1fr)_auto] sm:items-center sm:px-3">
+          <div className="flex gap-1" aria-label="Page navigation">
             <button
               type="button"
               onClick={() => void traverse("back")}
               disabled={!browserReady || isNavigating || !canGoBack}
-              className="chrome-button"
+              className="inline-grid size-10 place-items-center rounded-[0.7rem] border border-transparent text-[#4f5869] outline-none transition-[color,background-color,border-color,transform] hover:border-[var(--line)] hover:bg-white/70 hover:text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[rgb(103_92_245_/_24%)] active:scale-[.97] disabled:cursor-not-allowed disabled:opacity-35"
               aria-label="Go back"
+              title="Go back"
             >
               <ArrowLeftIcon className="size-5" />
             </button>
@@ -511,20 +530,21 @@ export function BrowserShell() {
               type="button"
               onClick={() => void traverse("forward")}
               disabled={!browserReady || isNavigating || !canGoForward}
-              className="chrome-button"
+              className="inline-grid size-10 place-items-center rounded-[0.7rem] border border-transparent text-[#4f5869] outline-none transition-[color,background-color,border-color,transform] hover:border-[var(--line)] hover:bg-white/70 hover:text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[rgb(103_92_245_/_24%)] active:scale-[.97] disabled:cursor-not-allowed disabled:opacity-35"
               aria-label="Go forward"
+              title="Go forward"
             >
               <ArrowRightIcon className="size-5" />
             </button>
           </div>
 
-          <form className="flex min-w-0" onSubmit={submitAddress}>
+          <form className="flex min-w-0 overflow-hidden rounded-xl border border-[var(--line-strong)] bg-white/70 shadow-[var(--shadow-control)] transition-[border-color,box-shadow,background-color] focus-within:border-[rgb(103_92_245_/_62%)] focus-within:bg-white focus-within:shadow-[0_0_0_3px_rgb(103_92_245_/_13%),0_4px_14px_rgb(31_38_52_/_8%)]" onSubmit={submitAddress}>
             <label htmlFor="address" className="sr-only">
               Fictional address
             </label>
-            <div className="flex min-w-0 flex-1 items-center rounded-l-full border-2 border-r-0 border-[var(--ink)] bg-[var(--paper)] focus-within:shadow-[0_0_0_3px_var(--focus)]">
-              <span className="pl-4 text-xs font-black text-[var(--muted)]" aria-hidden="true">
-                ZZ
+            <div className="flex min-w-0 flex-1 items-center">
+              <span className="ml-3 grid size-5 shrink-0 place-items-center rounded-md bg-[var(--accent-soft)] text-[0.58rem] font-bold text-[var(--accent-deep)]" aria-hidden="true">
+                .zz
               </span>
               <input
                 id="address"
@@ -534,42 +554,48 @@ export function BrowserShell() {
                 autoComplete="off"
                 spellCheck="false"
                 placeholder="Type an address, like lantern-room.zz"
-                className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-sm font-bold outline-none placeholder:font-normal placeholder:text-[var(--muted)] disabled:cursor-not-allowed"
+                className="min-w-0 flex-1 bg-transparent px-2.5 py-2.5 text-[0.82rem] font-medium outline-none placeholder:font-normal placeholder:text-[#9098a7] disabled:cursor-not-allowed"
               />
             </div>
             <button
               type="submit"
               disabled={!browserReady || isNavigating || address.trim() === ""}
-              className="rounded-r-full border-2 border-[var(--ink)] bg-[var(--ink)] px-5 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-70"
+              className="m-1 min-w-12 rounded-lg border border-[var(--line)] bg-[var(--chrome)] px-3 text-xs font-semibold text-[#444c5c] transition-colors hover:border-[var(--line-strong)] hover:bg-white focus-visible:outline-3 focus-visible:outline-offset-1 focus-visible:outline-[rgb(103_92_245_/_24%)] disabled:cursor-not-allowed disabled:opacity-45"
             >
               Go
             </button>
           </form>
 
-          <nav className="flex flex-wrap gap-2" aria-label="Browser tools">
+          <nav className="flex justify-end gap-1" aria-label="Browser tools">
             <button
               type="button"
               onClick={() => showUtility("search")}
               disabled={!browserReady || isNavigating}
-              className="tool-button"
+              className={`inline-grid size-10 place-items-center rounded-[0.7rem] border text-[#4f5869] outline-none transition-[color,background-color,border-color,transform] hover:border-[var(--line)] hover:bg-white/70 hover:text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[rgb(103_92_245_/_24%)] active:scale-[.97] disabled:cursor-not-allowed disabled:opacity-35 ${view.kind === "search" ? "border-[rgb(103_92_245_/_18%)] bg-[var(--accent-soft)] text-[var(--accent-deep)]" : "border-transparent"}`}
+              aria-label="Search"
+              aria-pressed={view.kind === "search"}
+              title="Search"
             >
               <SearchIcon className="size-4" />
-              Search
             </button>
             <button
               type="button"
               onClick={() => showUtility("history")}
               disabled={!browserReady || isNavigating}
-              className="tool-button"
+              className={`inline-grid size-10 place-items-center rounded-[0.7rem] border text-[#4f5869] outline-none transition-[color,background-color,border-color,transform] hover:border-[var(--line)] hover:bg-white/70 hover:text-[var(--ink)] focus-visible:border-[var(--accent)] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[rgb(103_92_245_/_24%)] active:scale-[.97] disabled:cursor-not-allowed disabled:opacity-35 ${view.kind === "history" ? "border-[rgb(103_92_245_/_18%)] bg-[var(--accent-soft)] text-[var(--accent-deep)]" : "border-transparent"}`}
+              aria-label="History"
+              aria-pressed={view.kind === "history"}
+              title="History"
             >
               <HistoryIcon className="size-4" />
-              History
             </button>
             <button
               type="button"
               onClick={() => showUtility("publish")}
               disabled={!browserReady || isNavigating}
-              className="tool-button tool-button-primary"
+              className={`inline-grid h-10 min-w-10 grid-flow-col place-items-center gap-2 rounded-[0.7rem] border px-3.5 text-[0.8125rem] font-semibold outline-none transition-[color,background-color,border-color,transform] focus-visible:border-[var(--accent)] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[rgb(103_92_245_/_24%)] active:scale-[.97] disabled:cursor-not-allowed disabled:opacity-35 ${view.kind === "publish" ? "border-[var(--accent-deep)] bg-[var(--accent)] text-white" : "border-[rgb(103_92_245_/_24%)] bg-[var(--accent-soft)] text-[var(--accent-deep)] hover:border-[rgb(103_92_245_/_34%)] hover:bg-[#e5e2ff]"}`}
+              aria-pressed={view.kind === "publish"}
+              title="Publish a site"
             >
               <PublishIcon className="size-4" />
               Publish
@@ -577,20 +603,17 @@ export function BrowserShell() {
           </nav>
         </div>
 
-        <div className="flex min-h-[32rem] flex-1 p-3 sm:p-5">
+        <div className="flex min-h-[32rem] flex-1 p-2 sm:p-3">
           <section
-            className="relative flex min-h-full w-full overflow-hidden rounded-[1.1rem] border-2 border-[var(--ink)] bg-[var(--paper)]"
+            className="relative flex min-h-full w-full overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--paper)] shadow-[0_1px_2px_rgb(31_38_52_/_8%),0_10px_32px_rgb(31_38_52_/_5%)]"
             aria-live="polite"
             aria-busy={loadStatus === "loading" || isNavigating}
           >
+            {isNavigating && <span className="absolute top-0 left-0 z-30 h-0.5 w-[38%] animate-[navigation-progress_1.2s_ease-in-out_infinite] rounded-r-full bg-[linear-gradient(90deg,transparent,var(--accent)_26%,#9a92ff)]" aria-hidden="true" />}
             {loadStatus === "loading" && (
               <div className="m-auto w-full max-w-md px-8 text-center">
-                <div className="mx-auto mb-6 flex w-fit gap-2" aria-hidden="true">
-                  <span className="loading-dot" />
-                  <span className="loading-dot [animation-delay:120ms]" />
-                  <span className="loading-dot [animation-delay:240ms]" />
-                </div>
-                <h1 className="text-2xl font-black tracking-[-0.03em]">
+                <div className="mb-6"><LoadingOrbit /></div>
+                <h1 className="text-2xl font-semibold tracking-[-0.035em]">
                   Opening the fictional web
                 </h1>
                 <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
@@ -601,10 +624,8 @@ export function BrowserShell() {
 
             {loadStatus === "error" && (
               <div className="m-auto max-w-md px-8 py-14 text-center">
-                <span className="mx-auto grid size-14 place-items-center rounded-full border-2 border-[var(--ink)] bg-[var(--coral)] text-2xl font-black text-white">
-                  !
-                </span>
-                <h1 className="mt-6 text-2xl font-black tracking-[-0.03em]">
+                <StateOrb danger>!</StateOrb>
+                <h1 className="mt-6 text-2xl font-semibold tracking-[-0.035em]">
                   The network is out of reach
                 </h1>
                 <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
@@ -613,7 +634,7 @@ export function BrowserShell() {
                 <button
                   type="button"
                   onClick={retryPeople}
-                  className="mt-6 rounded-full border-2 border-[var(--ink)] bg-[var(--signal)] px-5 py-2.5 text-sm font-black shadow-[3px_3px_0_var(--ink)] transition-transform hover:-translate-y-0.5 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)] active:translate-y-0"
+                  className="mt-6 inline-flex min-h-11 items-center justify-center rounded-xl border border-[var(--line-strong)] bg-white px-[1.15rem] text-sm font-semibold text-[var(--ink)] shadow-[var(--shadow-control)] outline-none transition-[background-color,border-color,box-shadow,transform] hover:border-[#b5bdca] hover:bg-[#fafbfc] focus-visible:border-[var(--accent)] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[rgb(103_92_245_/_24%)] active:scale-[.97]"
                 >
                   Try again
                 </button>
@@ -622,10 +643,8 @@ export function BrowserShell() {
 
             {loadStatus === "ready" && people.length === 0 && (
               <div className="m-auto max-w-md px-8 py-14 text-center">
-                <p className="text-5xl" aria-hidden="true">
-                  ◌
-                </p>
-                <h1 className="mt-4 text-2xl font-black tracking-[-0.03em]">
+                <StateOrb>◌</StateOrb>
+                <h1 className="mt-6 text-2xl font-semibold tracking-[-0.035em]">
                   Nobody is here yet
                 </h1>
                 <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
@@ -635,10 +654,10 @@ export function BrowserShell() {
             )}
 
             {browserReady && view.kind === "welcome" && (
-              <div className="network-grid relative flex w-full flex-col items-center justify-center overflow-hidden px-6 py-12 text-center sm:px-12">
+              <div className="network-grid relative flex w-full flex-col items-center justify-center overflow-hidden bg-[linear-gradient(180deg,#fff_0%,#fbfbfe_100%)] px-6 py-12 text-center sm:px-12">
                 <div className="relative z-10 flex w-full flex-col items-center">
                   <NetworkMap />
-                  <h1 className="mt-1 max-w-2xl text-3xl font-black tracking-[-0.05em] sm:text-5xl">
+                  <h1 className="mt-1 max-w-2xl text-3xl font-semibold tracking-[-0.055em] sm:text-5xl">
                     A small web with strange corners.
                   </h1>
                   <p className="mt-4 max-w-xl text-sm leading-6 text-[var(--muted)] sm:text-base">
@@ -651,12 +670,8 @@ export function BrowserShell() {
 
             {browserReady && view.kind === "loading" && (
               <div className="m-auto w-full max-w-md px-8 text-center">
-                <div className="mx-auto mb-6 flex w-fit gap-2" aria-hidden="true">
-                  <span className="loading-dot" />
-                  <span className="loading-dot [animation-delay:120ms]" />
-                  <span className="loading-dot [animation-delay:240ms]" />
-                </div>
-                <h1 className="text-2xl font-black tracking-[-0.03em]">
+                <div className="mb-6"><LoadingOrbit /></div>
+                <h1 className="text-2xl font-semibold tracking-[-0.035em]">
                   Following the path
                 </h1>
                 <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
@@ -676,10 +691,8 @@ export function BrowserShell() {
             {browserReady && view.kind === "not_found" && (
               <div className="network-grid relative m-auto flex min-h-full w-full items-center justify-center overflow-hidden px-8 py-14 text-center">
                 <div className="relative z-10 max-w-lg">
-                  <span className="mx-auto grid size-20 place-items-center rounded-full border-2 border-[var(--ink)] bg-[var(--signal)] text-4xl font-black shadow-[4px_4px_0_var(--ink)]">
-                    ?
-                  </span>
-                  <h1 className="mt-7 text-3xl font-black tracking-[-0.04em]">
+                  <StateOrb className="!size-16 !text-2xl">?</StateOrb>
+                  <h1 className="mt-7 text-3xl font-semibold tracking-[-0.045em]">
                     This path ends here
                   </h1>
                   <p className="mt-3 text-base leading-7 text-[var(--muted)]">
@@ -692,10 +705,8 @@ export function BrowserShell() {
 
             {browserReady && view.kind === "error" && (
               <div className="m-auto max-w-lg px-8 py-14 text-center">
-                <span className="mx-auto grid size-14 place-items-center rounded-full border-2 border-[var(--ink)] bg-[var(--coral)] text-2xl font-black text-white">
-                  !
-                </span>
-                <h1 className="mt-6 text-2xl font-black tracking-[-0.03em]">
+                <StateOrb danger>!</StateOrb>
+                <h1 className="mt-6 text-2xl font-semibold tracking-[-0.035em]">
                   The path could not be opened
                 </h1>
                 <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
